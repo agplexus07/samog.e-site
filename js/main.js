@@ -249,55 +249,52 @@
     if (i !== exp.index) expSetIndex(i);
   }, { passive: true });
 
-  /* ---------------- Galeria: círculo de fotos + lightbox ---------------- */
-  let ringTween = null;
-  function initLightbox() {
-    const ring = $('[data-ring]');
+  /* ---------------- Galeria: órbita 3D de fotos (Three.js) + lightbox ---------------- */
+  const orbitEl = $('[data-orbit]');
+  const orbitBtns = orbitEl ? $$('.orbit__btn', orbitEl) : [];
+  const orbit = { paused: false, boost: 0, box: null };
+
+  const lightbox = (() => {
     const lb = $('[data-lightbox]');
-    if (!ring || !lb) return;
-    const btns = $$('.ring__btn', ring);
-    const step = 360 / btns.length;
-    btns.forEach((b, i) => b.parentElement.style.setProperty('--a', i * step + 'deg'));
+    if (!lb || !orbitBtns.length) return null;
     const img = $('.lightbox__img', lb);
     const pad = (n) => String(n).padStart(2, '0');
-    $('[data-lb-total]', lb).textContent = pad(btns.length);
+    $('[data-lb-total]', lb).textContent = pad(orbitBtns.length);
     let cur = -1;
     let lastFocus = null;
 
-    const ratioOf = (b) => { const t = $('img', b); return t.naturalWidth ? t.naturalWidth / t.naturalHeight : 1.5; };
+    const ratioOf = (i) => +orbitBtns[i].dataset.ratio || 1.5;
     function fitBox(ratio) {
       const maxW = innerWidth * (innerWidth < 761 ? 0.94 : 0.84);
       const maxH = innerHeight * 0.78;
       let w = maxW, h = w / ratio;
       if (h > maxH) { h = maxH; w = h * ratio; }
-      return { left: (innerWidth - w) / 2, top: (innerHeight - h) / 2, width: w, height: h, rotation: 0 };
+      return { left: (innerWidth - w) / 2, top: (innerHeight - h) / 2, width: w, height: h };
     }
-    // a foto parte exatamente de onde está no círculo, inclusive com a inclinação
-    function cardBox(i) {
-      const b = btns[i];
-      const r = b.getBoundingClientRect();
-      const w = b.offsetWidth, h = b.offsetHeight;
-      let rot = (gsap.getProperty('.ring__track', 'rotation') || 0) + i * step;
-      rot = ((rot % 360) + 540) % 360 - 180;
-      return { left: r.left + r.width / 2 - w / 2, top: r.top + r.height / 2 - h / 2, width: w, height: h, rotation: rot };
+    // a foto parte do ponto onde está na órbita; sem essa posição, nasce pequena no centro
+    function startBox(i) {
+      const b = orbit.box && orbit.box(i);
+      if (b) return b;
+      const s = Math.min(innerWidth, innerHeight) * 0.2;
+      return { left: (innerWidth - s) / 2, top: (innerHeight - s) / 2, width: s, height: s };
     }
     function show(i) {
       cur = i;
-      img.src = btns[i].dataset.full;
-      img.alt = $('img', btns[i]).alt;
+      img.src = orbitBtns[i].dataset.full;
+      img.alt = orbitBtns[i].dataset.alt;
       $('[data-lb-n]', lb).textContent = pad(i + 1);
     }
     function open(i) {
       lastFocus = document.activeElement;
       show(i);
       lb.hidden = false;
-      if (ringTween) ringTween.pause();
+      orbit.paused = true;
       if (smoother) smoother.paused(true); else document.documentElement.style.overflow = 'hidden';
-      const end = fitBox(ratioOf(btns[i]));
+      const end = fitBox(ratioOf(i));
       if (REDUCE) gsap.set(img, end);
       else {
         gsap.fromTo('.lightbox__veil', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.5, ease: 'power2.out' });
-        gsap.fromTo(img, cardBox(i), { ...end, duration: 0.9, ease: 'expo.inOut' });
+        gsap.fromTo(img, { ...startBox(i), x: 0, autoAlpha: 1 }, { ...end, duration: 0.9, ease: 'expo.inOut' });
         gsap.fromTo('.lightbox__btn, .lightbox__count', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4, delay: 0.5 });
       }
       $('.lightbox__close', lb).focus({ preventScroll: true });
@@ -306,28 +303,27 @@
       if (lb.hidden) return;
       const done = () => {
         lb.hidden = true;
-        if (ringTween) ringTween.resume();
+        orbit.paused = false;
         if (smoother) smoother.paused(false); else document.documentElement.style.overflow = '';
         if (lastFocus) lastFocus.focus({ preventScroll: true });
       };
       if (REDUCE) return done();
       gsap.to('.lightbox__btn, .lightbox__count', { autoAlpha: 0, duration: 0.2 });
       gsap.to('.lightbox__veil', { autoAlpha: 0, duration: 0.5, delay: 0.3 });
-      gsap.to(img, { ...cardBox(cur), autoAlpha: 1, x: 0, duration: 0.8, ease: 'expo.inOut', onComplete: done });
+      gsap.to(img, { ...startBox(cur), x: 0, duration: 0.8, ease: 'expo.inOut', onComplete: done });
     }
     function go(dir) {
-      const next = (cur + dir + btns.length) % btns.length;
-      if (REDUCE) { show(next); gsap.set(img, fitBox(ratioOf(btns[next]))); return; }
+      const next = (cur + dir + orbitBtns.length) % orbitBtns.length;
+      if (REDUCE) { show(next); gsap.set(img, fitBox(ratioOf(next))); return; }
       gsap.to(img, {
         autoAlpha: 0, x: -dir * 60, duration: 0.25, ease: 'power2.in',
         onComplete: () => {
           show(next);
-          gsap.set(img, fitBox(ratioOf(btns[next])));
+          gsap.set(img, fitBox(ratioOf(next)));
           gsap.fromTo(img, { x: dir * 60, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.6, ease: 'expo.out' });
         }
       });
     }
-    btns.forEach((b, i) => b.addEventListener('click', () => open(i)));
     $$('[data-lb-close]', lb).forEach((el) => el.addEventListener('click', close));
     $$('[data-lb]', lb).forEach((el) => el.addEventListener('click', () => go(+el.dataset.lb)));
     document.addEventListener('keydown', (e) => {
@@ -343,9 +339,166 @@
         f[(k + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
       }
     });
-    window.addEventListener('resize', () => { if (!lb.hidden) gsap.set(img, fitBox(ratioOf(btns[cur]))); });
+    window.addEventListener('resize', () => { if (!lb.hidden) gsap.set(img, fitBox(ratioOf(cur))); });
+    return { open };
+  })();
+  // botões para teclado e leitor de tela (a órbita em si é um canvas)
+  orbitBtns.forEach((b, i) => b.addEventListener('click', () => lightbox && lightbox.open(i)));
+
+  function initOrbit() {
+    if (!orbitEl || !window.THREE) return;
+    const T = window.THREE;
+    const holder = $('.orbit__canvas', orbitEl);
+    let renderer;
+    try { renderer = new T.WebGLRenderer({ antialias: true, alpha: true }); } catch (e) { return; }
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    holder.appendChild(renderer.domElement);
+    orbitEl.classList.add('is-3d');
+
+    const scene = new T.Scene();
+    const camera = new T.PerspectiveCamera(50, 1, 0.1, 200);
+    const group = new T.Group();
+    scene.add(group);
+
+    // fotos distribuídas numa esfera (espiral de Fibonacci), viradas para fora
+    const count = orbitBtns.length;
+    const SIZE = 1.75;
+    const radius = Math.sqrt(count) * 1.15;
+    const geo = new T.PlaneGeometry(SIZE, SIZE);
+    const meshes = orbitBtns.map((b, i) => {
+      const phi = Math.acos(-1 + (2 * i + 1) / count);
+      const theta = Math.sqrt(count * Math.PI) * phi;
+      const mat = new T.MeshBasicMaterial({ transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false });
+      const m = new T.Mesh(geo, mat);
+      m.position.setFromSphericalCoords(radius, phi, theta);
+      m.lookAt(m.position.clone().multiplyScalar(2));
+      m.userData = { i, alpha: 0, hover: 1 };
+      group.add(m);
+      roundedTexture(b.dataset.thumb, (tex) => {
+        mat.map = tex; mat.needsUpdate = true;
+        gsap.to(m.userData, { alpha: 1, duration: 1.4, delay: 0.2 + i * 0.03, ease: 'power2.out' });
+      });
+      return m;
+    });
+
+    function roundedTexture(src, done) {
+      const im = new Image();
+      im.onload = () => {
+        const S = 512, r = S * 0.08;
+        const c = document.createElement('canvas');
+        c.width = c.height = S;
+        const ctx = c.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(r, 0); ctx.arcTo(S, 0, S, S, r); ctx.arcTo(S, S, 0, S, r); ctx.arcTo(0, S, 0, 0, r); ctx.arcTo(0, 0, S, 0, r);
+        ctx.closePath(); ctx.clip();
+        const side = Math.min(im.width, im.height);
+        ctx.drawImage(im, (im.width - side) / 2, (im.height - side) / 2, side, side, 0, 0, S, S);
+        const tex = new T.CanvasTexture(c);
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        done(tex);
+      };
+      im.src = src;
+    }
+
+    function resize() {
+      const w = holder.clientWidth, h = holder.clientHeight;
+      if (!w || !h) return;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      // enquadra a esfera inteira tanto na largura quanto na altura
+      const v = T.MathUtils.degToRad(camera.fov);
+      const hor = 2 * Math.atan(Math.tan(v / 2) * camera.aspect);
+      camera.position.set(0, 0, (radius + SIZE) / Math.sin(Math.min(v, hor) / 2));
+      camera.lookAt(0, 0, 0);
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // arrastar gira (com inércia); clique sem arrastar amplia a foto
+    const rot = { x: -0.15, y: 0, vx: 0, vy: 0 };
+    const pointer = new T.Vector2();
+    const ray = new T.Raycaster();
+    let drag = null;
+    let hovered = null;
+    const canvas = renderer.domElement;
+    function pick(e) {
+      const r = canvas.getBoundingClientRect();
+      pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(pointer, camera);
+      const hit = ray.intersectObjects(meshes).find((h) => h.object.userData.alpha > 0.5 && facing(h.object) > -0.2);
+      return hit ? hit.object : null;
+    }
+    const wp = new T.Vector3();
+    // 1 = de frente para a câmera, -1 = do outro lado da esfera
+    const facing = (m) => m.getWorldPosition(wp).z / radius;
+    canvas.addEventListener('pointerdown', (e) => {
+      drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: 0 };
+      rot.vx = rot.vy = 0;
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (drag) {
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        drag.x = e.clientX; drag.y = e.clientY;
+        drag.moved = Math.max(drag.moved, Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy));
+        rot.vy = dx * 0.006; rot.vx = dy * 0.006;
+        rot.y += rot.vy; rot.x = gsap.utils.clamp(-1.1, 1.1, rot.x + rot.vx);
+        return;
+      }
+      if (e.target !== canvas) { if (hovered) setHover(null); return; }
+      setHover(pick(e));
+    }, { passive: true });
+    window.addEventListener('pointerup', (e) => {
+      if (!drag) return;
+      const click = drag.moved < 6 && e.target === canvas;
+      drag = null;
+      if (click) { const m = pick(e); if (m && lightbox) lightbox.open(m.userData.i); }
+    });
+    canvas.addEventListener('pointercancel', () => { drag = null; });
+    function setHover(m) {
+      if (m === hovered) return;
+      if (hovered) gsap.to(hovered.userData, { hover: 1, duration: 0.5, ease: 'expo.out' });
+      hovered = m;
+      if (m) gsap.to(m.userData, { hover: 1.35, duration: 0.6, ease: 'expo.out' });
+      canvas.style.cursor = m ? 'zoom-in' : 'grab';
+    }
+
+    // posição da foto na tela, para o lightbox nascer dela
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => new T.Vector3(x * SIZE / 2, y * SIZE / 2, 0));
+    orbit.box = (i) => {
+      const m = meshes[i];
+      if (facing(m) < 0) return null;
+      m.updateMatrixWorld();
+      const r = canvas.getBoundingClientRect();
+      const pts = corners.map((c) => c.clone().applyMatrix4(m.matrixWorld).project(camera));
+      const xs = pts.map((p) => r.left + ((p.x + 1) / 2) * r.width);
+      const ys = pts.map((p) => r.top + ((1 - p.y) / 2) * r.height);
+      const left = Math.min(...xs), top = Math.min(...ys);
+      return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
+    };
+
+    let visible = false;
+    new IntersectionObserver(([en]) => { visible = en.isIntersecting; }, { rootMargin: '100px' }).observe(orbitEl);
+    gsap.ticker.add((time, dt) => {
+      if (!visible || orbit.paused) return;
+      const k = Math.min(dt, 50) / 16.67;
+      if (!drag) {
+        if (!REDUCE) rot.y += 0.0025 * k * (1 + orbit.boost);
+        rot.y += rot.vy * k; rot.x = gsap.utils.clamp(-1.1, 1.1, rot.x + rot.vx * k);
+        rot.vx *= 0.93; rot.vy *= 0.93;
+      }
+      group.rotation.set(rot.x, rot.y, 0);
+      group.updateMatrixWorld();
+      meshes.forEach((m) => {
+        // as fotos do fundo ficam apagadas, dando profundidade
+        const f = facing(m);
+        m.material.opacity = m.userData.alpha * (0.18 + 0.82 * gsap.utils.clamp(0, 1, (f + 0.6) / 1.4));
+        m.scale.setScalar(m.userData.hover);
+      });
+      renderer.render(scene, camera);
+    });
   }
-  initLightbox();
+  initOrbit();
 
   if (REDUCE) {
     $('.exp').classList.add('is-static');
@@ -532,24 +685,16 @@
   window.addEventListener('resize', () => placePill($('.daytab.is-active'), true));
   gsap.from('#dia-1 li', { x: 40, autoAlpha: 0, stagger: 0.08, duration: 1, scrollTrigger: { trigger: '#dia-1', start: 'top 80%' } });
 
-  /* ---------------- Galeria: o círculo gira; o scroll acelera, o mouse desacelera ---------------- */
-  ringTween = gsap.to('.ring__track', { rotation: 360, duration: 110, ease: 'none', repeat: -1 });
-  let ringBase = 1;
-  const ringEl = $('[data-ring]');
-  ringEl.addEventListener('pointerenter', () => { ringBase = 0.12; gsap.to(ringTween, { timeScale: ringBase, duration: 0.8, overwrite: true }); });
-  ringEl.addEventListener('pointerleave', () => { ringBase = 1; gsap.to(ringTween, { timeScale: ringBase, duration: 0.8, overwrite: true }); });
+  /* ---------------- Galeria: o scroll dá um impulso na órbita ---------------- */
   ScrollTrigger.create({
     trigger: '.gallery', start: 'top bottom', end: 'bottom top',
     onUpdate(self) {
-      const boost = Math.min(Math.abs(self.getVelocity()) / 220, 9);
-      if (boost < 0.5) return;
-      gsap.to(ringTween, { timeScale: ringBase + boost, duration: 0.25, overwrite: true, onComplete: () => gsap.to(ringTween, { timeScale: ringBase, duration: 1.4 }) });
+      const boost = Math.min(Math.abs(self.getVelocity()) / 200, 10);
+      if (boost > orbit.boost) gsap.fromTo(orbit, { boost }, { boost: 0, duration: 1.6, ease: 'power2.out', overwrite: true });
     }
   });
-  gsap.from('.ring__btn', {
-    scale: 0, autoAlpha: 0, duration: 1.2, ease: 'expo.out', stagger: { each: 0.05, from: 'start' },
-    scrollTrigger: { trigger: '.ring', start: 'top 75%' }
-  });
+  gsap.from('.gallery__head > *', { y: 40, autoAlpha: 0, stagger: 0.1, duration: 1.2, scrollTrigger: { trigger: '.gallery', start: 'top 70%' } });
+  gsap.from('.orbit__canvas', { scale: 0.6, autoAlpha: 0, duration: 2, ease: 'expo.out', scrollTrigger: { trigger: '.gallery', start: 'top 70%' } });
 
   /* ---------------- O evento: baralho de fotos ---------------- */
   const deck = $('[data-deck]');
