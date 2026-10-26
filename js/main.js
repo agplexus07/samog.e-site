@@ -17,10 +17,6 @@
   const $ = (s, c = document) => c.querySelector(s);
   const $$ = (s, c = document) => [...c.querySelectorAll(s)];
 
-  // elementos fixos não podem ficar dentro do conteúdo transformado do smoother
-  const floatImg = $('.audience__float');
-  if (floatImg) document.body.appendChild(floatImg);
-
   let smoother = null;
   if (!REDUCE) {
     smoother = ScrollSmoother.create({
@@ -179,7 +175,7 @@
     })
       .add(() => { if (!assetsReady) { tl.pause(); const w = setInterval(() => { if (assetsReady) { clearInterval(w); tl.resume(); } }, 60); } })
       .to('.loader__count, .loader__line', { y: -30, autoAlpha: 0, duration: 0.5, ease: 'power3.in' })
-      .to('.loader__drop', { scale: 14, autoAlpha: 0, duration: 1.1, ease: 'expo.in' }, '<0.1')
+      .to('.loader__drop', { scale: 0.6, autoAlpha: 0, duration: 0.6, ease: 'power3.in' }, '<0.1')
       .to(loader, { clipPath: 'inset(0 0 100% 0)', duration: 1, ease: 'expo.inOut' }, '-=0.35')
       .add(() => {
         loader.remove();
@@ -196,7 +192,165 @@
     runLoader();
   }
 
-  if (REDUCE) return; // daqui pra baixo é tudo animação de scroll
+  /* ---------------- Experiências: setas ---------------- */
+  // No desktop as setas rolam a página até o painel (a faixa horizontal é guiada pelo scroll);
+  // sem animação, a faixa vira uma rolagem lateral comum e as setas a movem direto.
+  const expTrack = $('.exp__track');
+  const expPanels = $$('.panel', expTrack);
+  const expPrev = $('[data-exp="prev"]');
+  const expNext = $('[data-exp="next"]');
+  const expCur = $('[data-exp-current]');
+  const exp = { st: null, distance: null, index: 0 };
+  function expSetIndex(i) {
+    exp.index = i;
+    expCur.textContent = String(i + 1).padStart(2, '0');
+    expPrev.disabled = i === 0;
+    expNext.disabled = i === expPanels.length - 1;
+  }
+  const expGutter = () => parseFloat(getComputedStyle($('.exp__intro')).paddingLeft) || 24;
+  // progresso da faixa em que o painel i encosta na margem esquerda
+  const expPanelProgress = (i) => gsap.utils.clamp(0, 1, (expTrack.offsetLeft + expPanels[i].offsetLeft - expGutter()) / exp.distance());
+  function expSync(progress) {
+    let i = 0;
+    expPanels.forEach((_, k) => { if (expPanelProgress(k) <= progress + 0.02) i = k; });
+    if (progress > 0.98) i = expPanels.length - 1;
+    if (i !== exp.index) expSetIndex(i);
+  }
+  function expGo(i) {
+    i = gsap.utils.clamp(0, expPanels.length - 1, i);
+    if (exp.st) {
+      exp.pending = expPanelProgress(i);
+      clearTimeout(exp.pendingTimer);
+      exp.pendingTimer = setTimeout(() => { exp.pending = null; }, 1200);
+      const y = exp.st.start + exp.pending * (exp.st.end - exp.st.start) + 1;
+      if (smoother) smoother.scrollTo(y, true);
+      else window.scrollTo({ top: y, behavior: 'smooth' });
+    } else {
+      expTrack.scrollTo({ left: expPanels[i].offsetLeft - expTrack.offsetLeft, behavior: REDUCE ? 'auto' : 'smooth' });
+    }
+    expSetIndex(i);
+  }
+  // no fim da faixa vários painéis cabem na tela, então o destino sai do progresso atual, não do índice
+  function expStep(dir) {
+    if (!exp.st) return expGo(exp.index + dir);
+    const p = exp.pending != null ? exp.pending : exp.st.progress;
+    const ks = expPanels.map((_, k) => k);
+    const k = dir > 0 ? ks.find((i) => expPanelProgress(i) > p + 0.01) : ks.reverse().find((i) => expPanelProgress(i) < p - 0.01);
+    expGo(k === undefined ? (dir > 0 ? expPanels.length - 1 : 0) : k);
+  }
+  expPrev.addEventListener('click', () => expStep(-1));
+  expNext.addEventListener('click', () => expStep(1));
+  expTrack.addEventListener('scroll', () => {
+    if (exp.st) return;
+    const max = expTrack.scrollWidth - expTrack.clientWidth;
+    let i = 0;
+    expPanels.forEach((p, k) => { if (p.offsetLeft - expTrack.offsetLeft <= expTrack.scrollLeft + 20) i = k; });
+    if (expTrack.scrollLeft >= max - 4) i = expPanels.length - 1;
+    if (i !== exp.index) expSetIndex(i);
+  }, { passive: true });
+
+  /* ---------------- Galeria: círculo de fotos + lightbox ---------------- */
+  let ringTween = null;
+  function initLightbox() {
+    const ring = $('[data-ring]');
+    const lb = $('[data-lightbox]');
+    if (!ring || !lb) return;
+    const btns = $$('.ring__btn', ring);
+    const step = 360 / btns.length;
+    btns.forEach((b, i) => b.parentElement.style.setProperty('--a', i * step + 'deg'));
+    const img = $('.lightbox__img', lb);
+    const pad = (n) => String(n).padStart(2, '0');
+    $('[data-lb-total]', lb).textContent = pad(btns.length);
+    let cur = -1;
+    let lastFocus = null;
+
+    const ratioOf = (b) => { const t = $('img', b); return t.naturalWidth ? t.naturalWidth / t.naturalHeight : 1.5; };
+    function fitBox(ratio) {
+      const maxW = innerWidth * (innerWidth < 761 ? 0.94 : 0.84);
+      const maxH = innerHeight * 0.78;
+      let w = maxW, h = w / ratio;
+      if (h > maxH) { h = maxH; w = h * ratio; }
+      return { left: (innerWidth - w) / 2, top: (innerHeight - h) / 2, width: w, height: h, rotation: 0 };
+    }
+    // a foto parte exatamente de onde está no círculo, inclusive com a inclinação
+    function cardBox(i) {
+      const b = btns[i];
+      const r = b.getBoundingClientRect();
+      const w = b.offsetWidth, h = b.offsetHeight;
+      let rot = (gsap.getProperty('.ring__track', 'rotation') || 0) + i * step;
+      rot = ((rot % 360) + 540) % 360 - 180;
+      return { left: r.left + r.width / 2 - w / 2, top: r.top + r.height / 2 - h / 2, width: w, height: h, rotation: rot };
+    }
+    function show(i) {
+      cur = i;
+      img.src = btns[i].dataset.full;
+      img.alt = $('img', btns[i]).alt;
+      $('[data-lb-n]', lb).textContent = pad(i + 1);
+    }
+    function open(i) {
+      lastFocus = document.activeElement;
+      show(i);
+      lb.hidden = false;
+      if (ringTween) ringTween.pause();
+      if (smoother) smoother.paused(true); else document.documentElement.style.overflow = 'hidden';
+      const end = fitBox(ratioOf(btns[i]));
+      if (REDUCE) gsap.set(img, end);
+      else {
+        gsap.fromTo('.lightbox__veil', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.5, ease: 'power2.out' });
+        gsap.fromTo(img, cardBox(i), { ...end, duration: 0.9, ease: 'expo.inOut' });
+        gsap.fromTo('.lightbox__btn, .lightbox__count', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4, delay: 0.5 });
+      }
+      $('.lightbox__close', lb).focus({ preventScroll: true });
+    }
+    function close() {
+      if (lb.hidden) return;
+      const done = () => {
+        lb.hidden = true;
+        if (ringTween) ringTween.resume();
+        if (smoother) smoother.paused(false); else document.documentElement.style.overflow = '';
+        if (lastFocus) lastFocus.focus({ preventScroll: true });
+      };
+      if (REDUCE) return done();
+      gsap.to('.lightbox__btn, .lightbox__count', { autoAlpha: 0, duration: 0.2 });
+      gsap.to('.lightbox__veil', { autoAlpha: 0, duration: 0.5, delay: 0.3 });
+      gsap.to(img, { ...cardBox(cur), autoAlpha: 1, x: 0, duration: 0.8, ease: 'expo.inOut', onComplete: done });
+    }
+    function go(dir) {
+      const next = (cur + dir + btns.length) % btns.length;
+      if (REDUCE) { show(next); gsap.set(img, fitBox(ratioOf(btns[next]))); return; }
+      gsap.to(img, {
+        autoAlpha: 0, x: -dir * 60, duration: 0.25, ease: 'power2.in',
+        onComplete: () => {
+          show(next);
+          gsap.set(img, fitBox(ratioOf(btns[next])));
+          gsap.fromTo(img, { x: dir * 60, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.6, ease: 'expo.out' });
+        }
+      });
+    }
+    btns.forEach((b, i) => b.addEventListener('click', () => open(i)));
+    $$('[data-lb-close]', lb).forEach((el) => el.addEventListener('click', close));
+    $$('[data-lb]', lb).forEach((el) => el.addEventListener('click', () => go(+el.dataset.lb)));
+    document.addEventListener('keydown', (e) => {
+      if (lb.hidden) return;
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowRight') go(1);
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'Tab') {
+        // mantém o foco dentro da foto ampliada
+        const f = $$('.lightbox__btn', lb);
+        const k = f.indexOf(document.activeElement);
+        e.preventDefault();
+        f[(k + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+      }
+    });
+    window.addEventListener('resize', () => { if (!lb.hidden) gsap.set(img, fitBox(ratioOf(btns[cur]))); });
+  }
+  initLightbox();
+
+  if (REDUCE) {
+    $('.exp').classList.add('is-static');
+    return; // daqui pra baixo é tudo animação de scroll
+  }
 
   /* ---------------- Hero: o título se afasta ao rolar ---------------- */
   gsap.to('.hero__title', {
@@ -208,11 +362,20 @@
     scrollTrigger: { trigger: '.hero', start: '30% top', end: 'bottom top', scrub: true }
   });
 
+  /* ---------------- Hero: colunas de fotos em fluxo contínuo ---------------- */
+  $$('.hero__col').forEach((col, i) => {
+    col.innerHTML += col.innerHTML; // duplica para o loop não ter emenda
+    const up = i % 2 === 0;
+    gsap.fromTo(col, { yPercent: up ? 0 : -50 }, { yPercent: up ? -50 : 0, duration: 70 + i * 8, ease: 'none', repeat: -1 });
+  });
+  gsap.to('.hero__media', { yPercent: 12, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+  gsap.from('.hero__media', { autoAlpha: 0, scale: 1.08, duration: 2.4, ease: 'expo.out', delay: 0.2 });
+
   /* ---------------- Reveal: a gota abre para a feira ---------------- */
   const photo = $('.reveal__photo');
   const vmin = () => Math.min(innerWidth, innerHeight);
   const vmax = () => Math.max(innerWidth, innerHeight);
-  gsap.set(photo, { '--m': vmin() * 0.16 + 'px' });
+  gsap.set(photo, { '--m': vmin() * 0.26 + 'px' });
   photo.style.webkitMaskSize = 'var(--m)';
   photo.style.maskSize = 'var(--m)';
 
@@ -225,10 +388,9 @@
     scrollTrigger: { trigger: '.reveal', start: 'top top', end: '+=180%', scrub: 1, pin: true, anticipatePin: 1, invalidateOnRefresh: true }
   });
   revealTl
-    .fromTo('.reveal__logo', { scale: 1, autoAlpha: 1 }, { scale: 2.2, autoAlpha: 0, ease: 'power2.in', duration: 0.28 }, 0)
-    .fromTo(photo, { '--m': () => vmin() * 0.16 + 'px' }, { '--m': () => vmax() * 6 + 'px', ease: 'power3.in', duration: 1 }, 0)
+    .fromTo(photo, { '--m': () => vmin() * 0.26 + 'px' }, { '--m': () => vmax() * 6 + 'px', ease: 'power3.in', duration: 1 }, 0)
     .fromTo('.reveal__photo img', { scale: 1.35 }, { scale: 1, ease: 'none', duration: 1 }, 0)
-    .from(captionSplit, { yPercent: 110, stagger: 0.08, duration: 0.35, ease: 'power3.out' }, 0.72)
+    .from(captionSplit, { yPercent: 150, stagger: 0.08, duration: 0.35, ease: 'power3.out' }, 0.72)
     .from('.reveal__small', { autoAlpha: 0, duration: 0.25 }, 0.85)
     .to({}, { duration: 0.25 });
 
@@ -255,7 +417,7 @@
         type: 'lines', mask: 'lines', linesClass: 'line', autoSplit: true,
         onSplit(self) {
           return gsap.from(self.lines, {
-            yPercent: 115, duration: 1.3, stagger: 0.1,
+            yPercent: 135, duration: 1.3, stagger: 0.1,
             scrollTrigger: { trigger: h, start: 'top 85%' }
           });
         }
@@ -318,8 +480,10 @@
     const distance = () => track.scrollWidth + $('.exp__intro').offsetWidth - innerWidth + 40;
     const horiz = gsap.to([track, '.exp__intro'], {
       x: () => -distance(), ease: 'none',
-      scrollTrigger: { trigger: '.exp', start: 'top top', end: () => '+=' + distance(), pin: pinEl, scrub: 1, invalidateOnRefresh: true, anticipatePin: 1 }
+      scrollTrigger: { trigger: '.exp', start: 'top top', end: () => '+=' + distance(), pin: pinEl, scrub: 1, invalidateOnRefresh: true, anticipatePin: 1, onUpdate: (self) => expSync(self.progress) }
     });
+    exp.st = horiz.scrollTrigger;
+    exp.distance = distance;
     $$('.panel', track).forEach((p) => {
       gsap.fromTo($('img', p), { scale: 1.35, xPercent: 8 }, {
         scale: 1.05, xPercent: -4, ease: 'none',
@@ -331,6 +495,7 @@
       });
     });
 
+    return () => { exp.st = null; };
   });
 
   mm.add('(max-width: 760px)', () => {
@@ -367,33 +532,65 @@
   window.addEventListener('resize', () => placePill($('.daytab.is-active'), true));
   gsap.from('#dia-1 li', { x: 40, autoAlpha: 0, stagger: 0.08, duration: 1, scrollTrigger: { trigger: '#dia-1', start: 'top 80%' } });
 
-  /* ---------------- Galeria: cortinas ---------------- */
-  $$('.g').forEach((g, i) => {
-    gsap.fromTo(g, { clipPath: 'inset(100% 0% 0% 0%)' }, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.5, ease: 'expo.inOut', scrollTrigger: { trigger: g, start: 'top 90%' } });
-    gsap.fromTo($('img', g), { scale: 1.4 }, { scale: 1, duration: 2, ease: 'expo.out', scrollTrigger: { trigger: g, start: 'top 90%' } });
+  /* ---------------- Galeria: o círculo gira; o scroll acelera, o mouse desacelera ---------------- */
+  ringTween = gsap.to('.ring__track', { rotation: 360, duration: 110, ease: 'none', repeat: -1 });
+  let ringBase = 1;
+  const ringEl = $('[data-ring]');
+  ringEl.addEventListener('pointerenter', () => { ringBase = 0.12; gsap.to(ringTween, { timeScale: ringBase, duration: 0.8, overwrite: true }); });
+  ringEl.addEventListener('pointerleave', () => { ringBase = 1; gsap.to(ringTween, { timeScale: ringBase, duration: 0.8, overwrite: true }); });
+  ScrollTrigger.create({
+    trigger: '.gallery', start: 'top bottom', end: 'bottom top',
+    onUpdate(self) {
+      const boost = Math.min(Math.abs(self.getVelocity()) / 220, 9);
+      if (boost < 0.5) return;
+      gsap.to(ringTween, { timeScale: ringBase + boost, duration: 0.25, overwrite: true, onComplete: () => gsap.to(ringTween, { timeScale: ringBase, duration: 1.4 }) });
+    }
+  });
+  gsap.from('.ring__btn', {
+    scale: 0, autoAlpha: 0, duration: 1.2, ease: 'expo.out', stagger: { each: 0.05, from: 'start' },
+    scrollTrigger: { trigger: '.ring', start: 'top 75%' }
   });
 
-  /* ---------------- Público: foto segue o cursor ---------------- */
-  if (FINE && floatImg) {
-    const img = $('img', floatImg);
-    const fx = gsap.quickTo(floatImg, 'x', { duration: 0.7, ease: 'power3' });
-    const fy = gsap.quickTo(floatImg, 'y', { duration: 0.7, ease: 'power3' });
-    const fr = gsap.quickTo(floatImg, 'rotation', { duration: 0.9, ease: 'power3' });
-    let lastX = 0;
-    const list = $('[data-hover-list]');
-    list.addEventListener('pointermove', (e) => {
-      fx(e.clientX + 30); fy(e.clientY - floatImg.offsetHeight / 2);
-      fr(gsap.utils.clamp(-12, 12, (e.clientX - lastX) * 0.6)); lastX = e.clientX;
-    });
-    $$('li', list).forEach((li) => {
-      li.addEventListener('pointerenter', () => {
-        img.src = li.dataset.img;
-        gsap.to(floatImg, { autoAlpha: 1, scale: 1, duration: 0.5 });
+  /* ---------------- O evento: baralho de fotos ---------------- */
+  const deck = $('[data-deck]');
+  if (deck) {
+    const cards = $$('.deck__card', deck);
+    const order = cards.slice().reverse(); // order[0] é a carta do topo
+    const layout = (dur) => order.forEach((c, k) => gsap.to(c, {
+      zIndex: cards.length - k,
+      rotation: k === 0 ? 0 : (k % 2 ? 1 : -1) * Math.min(3 + k * 1.5, 9),
+      x: Math.min(k, 3) * 10, y: Math.min(k, 3) * -10,
+      scale: 1 - Math.min(k, 3) * 0.035,
+      autoAlpha: k < 4 ? 1 : 0,
+      duration: dur, ease: 'expo.out'
+    }));
+    layout(0);
+    let timer = null;
+    let deckActive = false;
+    const deal = () => {
+      const top = order[0];
+      gsap.to(top, {
+        xPercent: -115, rotation: -16, duration: 0.7, ease: 'power3.in',
+        onComplete: () => {
+          order.push(order.shift());
+          gsap.set(top, { xPercent: 0, zIndex: 0, autoAlpha: 0 });
+          layout(0.9);
+          timer = deckActive ? gsap.delayedCall(2.6, deal) : null;
+        }
       });
+    };
+    gsap.from(cards, { y: 80, rotation: 10, autoAlpha: 0, stagger: 0.07, duration: 1.2, scrollTrigger: { trigger: deck, start: 'top 80%' }, onComplete: () => layout(0.6) });
+    ScrollTrigger.create({
+      trigger: deck, start: 'top bottom', end: 'bottom top',
+      onToggle: (self) => {
+        deckActive = self.isActive;
+        if (self.isActive && !timer) timer = gsap.delayedCall(2.6, deal);
+        else if (!self.isActive && timer) { timer.kill(); timer = null; }
+      }
     });
-    list.addEventListener('pointerleave', () => gsap.to(floatImg, { autoAlpha: 0, scale: 0.8, duration: 0.4 }));
-    gsap.set(floatImg, { scale: 0.8 });
   }
+
+  /* ---------------- Público ---------------- */
   gsap.from('.audience__list li', { y: 40, autoAlpha: 0, stagger: 0.08, duration: 1, scrollTrigger: { trigger: '.audience__list', start: 'top 80%' } });
 
   /* ---------------- Como participar ---------------- */

@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&display=swap" rel="stylesheet">
 
   <link rel="preload" as="image" href="assets/img/03-feira-aerea.webp">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body class="is-loading">
 
@@ -69,6 +69,22 @@
     </div>
   </div>
 
+  <!-- ============ LIGHTBOX DA GALERIA ============ -->
+  <div class="lightbox" data-lightbox hidden role="dialog" aria-modal="true" aria-label="Foto ampliada">
+    <div class="lightbox__veil" data-lb-close></div>
+    <img class="lightbox__img" alt="">
+    <button type="button" class="lightbox__btn lightbox__close" data-lb-close aria-label="Fechar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <button type="button" class="lightbox__btn lightbox__prev" data-lb="-1" aria-label="Foto anterior">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    </button>
+    <button type="button" class="lightbox__btn lightbox__next" data-lb="1" aria-label="Próxima foto">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+    <p class="lightbox__count"><b data-lb-n>01</b> / <span data-lb-total>16</span></p>
+  </div>
+
   <div class="progress" aria-hidden="true"><span></span></div>
 
   <div id="smooth-wrapper">
@@ -77,6 +93,21 @@
 
     <!-- ============ HERO ============ -->
     <section class="hero" id="topo">
+      <!-- fluxo de fotos das edições anteriores -->
+      <div class="hero__media" aria-hidden="true">
+        <div class="hero__col">
+          <img src="assets/img/thumb/16-palco-2026.webp" alt=""><img src="assets/img/thumb/21-palestra-ampla.webp" alt=""><img src="assets/img/thumb/07-rodada-negocios.webp" alt=""><img src="assets/img/thumb/26-publico-sorrindo.webp" alt=""><img src="assets/img/thumb/03-feira-aerea.webp" alt="">
+        </div>
+        <div class="hero__col">
+          <img src="assets/img/thumb/05-palestrante-telao.webp" alt=""><img src="assets/img/thumb/18-estande-conversa.webp" alt=""><img src="assets/img/thumb/29-visitantes.webp" alt=""><img src="assets/img/thumb/23-autoridades.webp" alt=""><img src="assets/img/thumb/10-plateia-atenta.webp" alt="">
+        </div>
+        <div class="hero__col">
+          <img src="assets/img/thumb/22-feira-cima.webp" alt=""><img src="assets/img/thumb/27-risadas.webp" alt=""><img src="assets/img/thumb/02-palestra-plateia.webp" alt=""><img src="assets/img/thumb/31-equipe-estande.webp" alt=""><img src="assets/img/thumb/13-troca-contatos.webp" alt="">
+        </div>
+        <div class="hero__col">
+          <img src="assets/img/thumb/17-plateia-cheia.webp" alt=""><img src="assets/img/thumb/11-conexoes.webp" alt=""><img src="assets/img/thumb/25-painel-entrevista.webp" alt=""><img src="assets/img/thumb/06-networking-estande.webp" alt=""><img src="assets/img/thumb/19-abraco.webp" alt="">
+        </div>
+      </div>
       <div class="hero__grid">
         <p class="hero__kicker" data-hero-fade>
           <span class="dot"></span> Edição 2027 · Norte Capixaba
@@ -129,7 +160,6 @@
         <div class="reveal__photo">
           <img src="assets/img/03-feira-aerea.webp" alt="Vista do alto da área de exposição da SAMOG.e 2026, com estruturas metálicas amarelas e visitantes circulando entre os estandes" width="2000" height="1500">
         </div>
-        <img class="reveal__logo" src="assets/logos/samoge-drop.svg" alt="" aria-hidden="true">
         <div class="reveal__caption">
           <p class="reveal__big"><span>Conexões</span><span>que geram</span><span>resultados.</span></p>
           <p class="reveal__small">SAMOG.e 2026 · CEPE São Mateus</p>
@@ -140,13 +170,23 @@
     <!-- ============ O EVENTO ============ -->
     <section class="about" id="evento">
       <div class="about__head">
-        <p class="eyebrow">O evento</p>
-        <p class="about__manifesto" data-scrub-words>
-          A SAMOG.e reúne as operadoras independentes de petróleo e gás e as principais empresas de energia
-          que atuam no norte capixaba com a cadeia de fornecedores do Espírito Santo. Um ambiente pensado
-          para gerar negócios, fortalecer parcerias e desenvolver a cadeia produtiva da principal região
-          produtora onshore do estado.
-        </p>
+        <div class="about__text">
+          <p class="eyebrow">O evento</p>
+          <p class="about__manifesto" data-scrub-words>
+            A SAMOG.e conecta operadoras de petróleo, gás e energia do norte capixaba aos fornecedores
+            do Espírito Santo, para gerar negócios e fortalecer parcerias na principal região produtora
+            onshore do estado.
+          </p>
+        </div>
+        <div class="deck" data-deck aria-label="Fotos da SAMOG.e 2026">
+          <figure class="deck__card"><img src="assets/img/thumb/19-abraco.webp" alt="Participantes se abraçando em um estande da feira" width="720" height="480"></figure>
+          <figure class="deck__card"><img src="assets/img/thumb/17-plateia-cheia.webp" alt="Plateia lotada acompanhando uma palestra" width="720" height="480"></figure>
+          <figure class="deck__card"><img src="assets/img/thumb/28-rodada-mesa.webp" alt="Reunião em mesa da Rodada de Negócios" width="720" height="480"></figure>
+          <figure class="deck__card"><img src="assets/img/thumb/22-feira-cima.webp" alt="Vista do alto da feira com estruturas amarelas" width="720" height="540"></figure>
+          <figure class="deck__card"><img src="assets/img/thumb/25-painel-entrevista.webp" alt="Painel com convidados no palco da Arena RedePetro ES" width="720" height="480"></figure>
+          <figure class="deck__card"><img src="assets/img/thumb/20-grupo-estande.webp" alt="Grupo de expositores reunidos em frente a um estande" width="720" height="480"></figure>
+          <figure class="deck__card"><img src="assets/img/thumb/16-palco-2026.webp" alt="Palco da SAMOG.e 2026 com o telão do evento" width="720" height="480"></figure>
+        </div>
       </div>
 
       <ol class="timeline" data-timeline>
@@ -184,7 +224,15 @@
         <div class="exp__intro">
           <p class="eyebrow">O que acontece lá</p>
           <h2 class="h-display">Quatro formas de fazer negócio.</h2>
-          <p class="exp__hint">Arraste ou role <span aria-hidden="true">→</span></p>
+        </div>
+        <div class="exp__nav">
+          <button type="button" class="exp__arrow" data-exp="prev" aria-label="Experiência anterior" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+          </button>
+          <button type="button" class="exp__arrow" data-exp="next" aria-label="Próxima experiência">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+          <span class="exp__count" aria-live="polite"><b data-exp-current>01</b> / 04</span>
         </div>
         <div class="exp__track">
           <article class="panel">
@@ -268,14 +316,28 @@
     <section class="gallery" aria-labelledby="gal-title">
       <div class="gallery__head">
         <p class="eyebrow">Como foi a SAMOG.e 2026</p>
-        <h2 class="h-display" id="gal-title">Quem foi, voltou<br>com contatos.</h2>
+        <h2 class="h-display" id="gal-title">Quem foi,<br>voltou com mais conexões!</h2>
       </div>
-      <div class="gallery__grid">
-        <figure class="g g--a" data-speed="0.9"><img src="assets/img/05-palestrante-telao.webp" alt="Palestrante no palco diante do telão da SAMOG.e 2026" loading="lazy" width="2000" height="1333"></figure>
-        <figure class="g g--b" data-speed="1.1"><img src="assets/img/11-conexoes.webp" alt="Dois participantes sorrindo abraçados durante a feira" loading="lazy" width="2000" height="1333"></figure>
-        <figure class="g g--c" data-speed="0.95"><img src="assets/img/08-painel-debate.webp" alt="Painel de debate com três convidados sentados no palco" loading="lazy" width="2000" height="1333"></figure>
-        <figure class="g g--d" data-speed="1.15"><img src="assets/img/13-troca-contatos.webp" alt="Duas participantes trocando materiais em frente a um estande" loading="lazy" width="2000" height="1333"></figure>
-        <figure class="g g--e" data-speed="1"><img src="assets/img/10-plateia-atenta.webp" alt="Público atento a uma palestra na arena" loading="lazy" width="2000" height="1333"></figure>
+      <div class="ring" data-ring>
+        <ul class="ring__track">
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/05-palestrante-telao.webp" aria-label="Ampliar foto: Palestrante no palco diante do telão da SAMOG.e 2026"><img src="assets/img/thumb/05-palestrante-telao.webp" alt="Palestrante no palco diante do telão da SAMOG.e 2026" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/27-risadas.webp" aria-label="Ampliar foto: Participantes rindo juntos durante a feira"><img src="assets/img/thumb/27-risadas.webp" alt="Participantes rindo juntos durante a feira" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/08-painel-debate.webp" aria-label="Ampliar foto: Painel de debate com três convidados no palco"><img src="assets/img/thumb/08-painel-debate.webp" alt="Painel de debate com três convidados no palco" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/29-visitantes.webp" aria-label="Ampliar foto: Visitantes circulando entre os estandes"><img src="assets/img/thumb/29-visitantes.webp" alt="Visitantes circulando entre os estandes" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/13-troca-contatos.webp" aria-label="Ampliar foto: Participantes trocando materiais em frente a um estande"><img src="assets/img/thumb/13-troca-contatos.webp" alt="Participantes trocando materiais em frente a um estande" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/30-auditorio.webp" aria-label="Ampliar foto: Auditório da Arena RedePetro ES durante uma palestra"><img src="assets/img/thumb/30-auditorio.webp" alt="Auditório da Arena RedePetro ES durante uma palestra" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/11-conexoes.webp" aria-label="Ampliar foto: Dois participantes sorrindo abraçados"><img src="assets/img/thumb/11-conexoes.webp" alt="Dois participantes sorrindo abraçados" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/23-autoridades.webp" aria-label="Ampliar foto: Autoridades reunidas no palco da abertura"><img src="assets/img/thumb/23-autoridades.webp" alt="Autoridades reunidas no palco da abertura" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/14-feira-interacao.webp" aria-label="Ampliar foto: Expositores conversando com visitantes na feira"><img src="assets/img/thumb/14-feira-interacao.webp" alt="Expositores conversando com visitantes na feira" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/24-palestra-telao.webp" aria-label="Ampliar foto: Palestrante apresentando diante do telão"><img src="assets/img/thumb/24-palestra-telao.webp" alt="Palestrante apresentando diante do telão" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/31-equipe-estande.webp" aria-label="Ampliar foto: Equipe de expositores reunida no estande"><img src="assets/img/thumb/31-equipe-estande.webp" alt="Equipe de expositores reunida no estande" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/10-plateia-atenta.webp" aria-label="Ampliar foto: Público atento a uma palestra na arena"><img src="assets/img/thumb/10-plateia-atenta.webp" alt="Público atento a uma palestra na arena" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/18-estande-conversa.webp" aria-label="Ampliar foto: Conversa de negócios em um estande"><img src="assets/img/thumb/18-estande-conversa.webp" alt="Conversa de negócios em um estande" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/12-estudantes-senai.webp" aria-label="Ampliar foto: Estudantes do SENAI visitando a feira"><img src="assets/img/thumb/12-estudantes-senai.webp" alt="Estudantes do SENAI visitando a feira" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/26-publico-sorrindo.webp" aria-label="Ampliar foto: Público sorrindo na plateia"><img src="assets/img/thumb/26-publico-sorrindo.webp" alt="Público sorrindo na plateia" loading="lazy" width="720" height="480"></button></li>
+          <li class="ring__item"><button type="button" class="ring__btn" data-full="assets/img/21-palestra-ampla.webp" aria-label="Ampliar foto: Vista ampla da arena com público e palco"><img src="assets/img/thumb/21-palestra-ampla.webp" alt="Vista ampla da arena com público e palco" loading="lazy" width="720" height="480"></button></li>
+        </ul>
+        <p class="ring__hint" aria-hidden="true">Clique em uma foto para ampliar</p>
       </div>
     </section>
 
@@ -286,19 +348,18 @@
         <h2 class="h-display" id="aud-title">Se você vive a cadeia de energia, é aqui.</h2>
       </div>
       <ul class="audience__list" data-hover-list>
-        <li data-img="assets/img/14-feira-interacao.webp"><span class="n">01</span><h3>Fornecedores de bens e serviços</h3><p>Apresente sua empresa às operadoras e à indústria.</p></li>
-        <li data-img="assets/img/06-networking-estande.webp"><span class="n">02</span><h3>Operadoras e empresas de energia</h3><p>Encontre fornecedores capixabas qualificados.</p></li>
-        <li data-img="assets/img/12-estudantes-senai.webp"><span class="n">03</span><h3>Estudantes e startups</h3><p>Conheça o setor por dentro e faça os primeiros contatos.</p></li>
-        <li data-img="assets/img/04-abertura-oficial.webp"><span class="n">04</span><h3>Governo municipal, estadual e federal</h3><p>Acompanhe de perto o desenvolvimento da região.</p></li>
+        <li><span class="n">01</span><h3>Fornecedores de bens e serviços</h3><p>Apresente sua empresa às operadoras e à indústria.</p></li>
+        <li><span class="n">02</span><h3>Operadoras e empresas de energia</h3><p>Encontre fornecedores capixabas qualificados.</p></li>
+        <li><span class="n">03</span><h3>Estudantes e startups</h3><p>Conheça o setor por dentro e faça os primeiros contatos.</p></li>
+        <li><span class="n">04</span><h3>Governo municipal, estadual e federal</h3><p>Acompanhe de perto o desenvolvimento da região.</p></li>
       </ul>
-      <div class="audience__float" aria-hidden="true"><img alt=""></div>
     </section>
 
     <!-- ============ COMO PARTICIPAR ============ -->
     <section class="how" id="como-participar">
       <div class="how__head">
         <p class="eyebrow">Como participar</p>
-        <h2 class="h-display">Gratuito para o público.<br>Só precisa se inscrever antes.</h2>
+        <h2 class="h-display">Gratuito para o público.<br>Faça sua inscrição e garanta sua vaga.</h2>
       </div>
       <ol class="steps">
         <svg class="steps__path" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
@@ -649,8 +710,8 @@
   <script src="assets/vendor/CustomEase.min.js"></script>
   <script src="assets/vendor/Observer.min.js"></script>
   <script src="assets/vendor/qrcode.min.js"></script>
-  <script src="js/stand.js?v=10"></script>
-  <script src="js/inscricao.js?v=10"></script>
-  <script src="js/main.js?v=10"></script>
+  <script src="js/stand.js?v=12"></script>
+  <script src="js/inscricao.js?v=12"></script>
+  <script src="js/main.js?v=12"></script>
 </body>
 </html>
