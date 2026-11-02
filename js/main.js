@@ -162,7 +162,7 @@
     let assetsReady = false;
     Promise.all([
       document.fonts ? document.fonts.ready : Promise.resolve(),
-      new Promise((res) => { const img = new Image(); img.onload = img.onerror = res; img.src = 'assets/img/03-feira-aerea.webp'; })
+      new Promise((res) => { const img = new Image(); img.onload = img.onerror = res; img.src = 'assets/img/thumb/16-palco-2026.webp'; })
     ]).then(() => { assetsReady = true; });
 
     const tl = gsap.timeline();
@@ -524,28 +524,13 @@
   gsap.to('.hero__media', { yPercent: 12, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
   gsap.from('.hero__media', { autoAlpha: 0, scale: 1.08, duration: 2.4, ease: 'expo.out', delay: 0.2 });
 
-  /* ---------------- Reveal: a gota abre para a feira ---------------- */
-  const photo = $('.reveal__photo');
-  const vmin = () => Math.min(innerWidth, innerHeight);
-  const vmax = () => Math.max(innerWidth, innerHeight);
-  gsap.set(photo, { '--m': vmin() * 0.26 + 'px' });
-  photo.style.webkitMaskSize = 'var(--m)';
-  photo.style.maskSize = 'var(--m)';
-
+  /* ---------------- Slogan sobre a foto da feira (sem pin, a página segue fixa) ---------------- */
   const captionSplit = $$('.reveal__big span').map((s) => {
     s.innerHTML = `<i style="display:block;font-style:normal">${s.textContent}</i>`;
     return s.firstChild;
   });
-
-  const revealTl = gsap.timeline({
-    scrollTrigger: { trigger: '.reveal', start: 'top top', end: '+=180%', scrub: 1, pin: true, anticipatePin: 1, invalidateOnRefresh: true }
-  });
-  revealTl
-    .fromTo(photo, { '--m': () => vmin() * 0.26 + 'px' }, { '--m': () => vmax() * 6 + 'px', ease: 'power3.in', duration: 1 }, 0)
-    .fromTo('.reveal__photo img', { scale: 1.35 }, { scale: 1, ease: 'none', duration: 1 }, 0)
-    .from(captionSplit, { yPercent: 150, stagger: 0.08, duration: 0.35, ease: 'power3.out' }, 0.72)
-    .from('.reveal__small', { autoAlpha: 0, duration: 0.25 }, 0.85)
-    .to({}, { duration: 0.25 });
+  gsap.from(captionSplit, { yPercent: 150, stagger: 0.12, duration: 1.2, ease: 'expo.out', scrollTrigger: { trigger: '.reveal', start: 'top 60%' } });
+  gsap.from('.reveal__small', { autoAlpha: 0, duration: 1, delay: 0.4, scrollTrigger: { trigger: '.reveal', start: 'top 60%' } });
 
   /* ---------------- Faixas de logos dos parceiros ---------------- */
   function loop(track, speed, reverse) {

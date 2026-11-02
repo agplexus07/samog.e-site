@@ -11,8 +11,11 @@
 
   const SamogAPI = {
     async saveRegistration(data) {
-      const record = { id: makeId(), criadoEm: new Date().toISOString(), ...data };
       const list = readStore(STORE_INSC);
+      // numeração de controle a partir de 1000. Sem backend ela só é sequencial neste navegador;
+      // com servidor, o número deve vir dele.
+      const numero = 1000 + list.length;
+      const record = { id: makeId(), numero, criadoEm: new Date().toISOString(), ...data };
       list.push(record);
       writeStore(STORE_INSC, list);
       return record;
@@ -138,15 +141,24 @@
       cracha.value = (parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0]).slice(0, 22);
     });
 
-    // escolher "Estudante" ajusta o rótulo do cargo
-    form.querySelectorAll('input[name="perfil"]').forEach((r) => r.addEventListener('change', () => {
-      const lab = form.querySelector('label[for="cargo"]');
-      lab.textContent = r.value === 'Estudante' ? 'Curso' : 'Cargo';
-      const seg = form.querySelector('#segmento');
-      if (r.value === 'Estudante') seg.value = 'Instituição de ensino';
-      if (r.value === 'Imprensa') seg.value = 'Imprensa';
-      if (r.value === 'Governo / Instituição') seg.value = 'Governo ou entidade';
-    }));
+    // cada perfil define o que é obrigatório na etapa da empresa
+    const COMPANY_RULES = {
+      Visitante: { empresa: false, label: 'Empresa ou instituição' },
+      Imprensa: { empresa: true, label: 'Veículo de imprensa' },
+      Palestrante: { empresa: false, label: 'Empresa ou instituição' },
+      Expositor: { empresa: true, label: 'Empresa expositora' }
+    };
+    function applyProfile(perfil) {
+      const rule = COMPANY_RULES[perfil] || COMPANY_RULES.Visitante;
+      const empresa = form.querySelector('#empresa');
+      empresa.required = rule.empresa;
+      form.querySelector('label[for="empresa"]').textContent = rule.label + (rule.empresa ? '' : ' (opcional)');
+      form.querySelector('[data-company-hint]').textContent = rule.empresa
+        ? 'Informe a empresa. Cargo e CNPJ são opcionais.'
+        : 'Todos os campos desta etapa são opcionais.';
+      fieldError(empresa, '');
+    }
+    form.querySelectorAll('input[name="perfil"]').forEach((r) => r.addEventListener('change', () => applyProfile(r.value)));
 
     function validateStep(n) {
       const step = steps[n - 1];
@@ -164,11 +176,9 @@
         if (msg && ok) { ok = false; el.focus(); shake(el.closest('.field')); }
       });
       if (n === 4) {
-        const dias = form.querySelectorAll('input[name="dias"]:checked').length;
-        form.querySelector('[data-error-for="dias"]').textContent = dias ? '' : 'Escolha pelo menos um dia.';
         const lgpd = form.querySelector('input[name="lgpd"]').checked;
         form.querySelector('[data-error-for="lgpd"]').textContent = lgpd ? '' : 'Precisamos da sua autorização para emitir a credencial.';
-        if (!dias || !lgpd) ok = false;
+        if (!lgpd) ok = false;
       }
       return ok;
     }
@@ -232,14 +242,13 @@
         empresa: fd.get('empresa').trim(),
         cargo: fd.get('cargo').trim(),
         cnpj: fd.get('cnpj') || '',
-        segmento: fd.get('segmento'),
-        dias: fd.getAll('dias'),
         interesses: fd.getAll('interesses'),
         lgpd: true,
         novidades: !!fd.get('novidades')
       };
 
       const record = await SamogAPI.saveRegistration(data);
+      lastRecord = record;
       renderCredential(record);
       showDone(record);
     });
@@ -264,9 +273,11 @@
       else reveal();
     }
 
-    document.querySelector('[data-print]').addEventListener('click', () => window.print());
+    let lastRecord = null;
+    document.querySelector('[data-save]').addEventListener('click', () => lastRecord && saveCredential(lastRecord));
     document.querySelector('[data-new]').addEventListener('click', () => {
       form.reset();
+      applyProfile('Visitante');
       form.querySelectorAll('.field').forEach((f) => f.classList.remove('is-invalid'));
       submitBtn.disabled = false;
       submitBtn.querySelector('span').textContent = 'Concluir inscrição';
@@ -281,30 +292,30 @@
 
   /* ---------- Credencial ---------- */
   const CATEGORIAS = {
-    'Profissional do setor': { label: 'Visitante profissional', color: '#00b4f3' },
-    'Empresário / Fornecedor': { label: 'Empresário', color: '#f2c230' },
-    'Estudante': { label: 'Estudante', color: '#fc689a' },
-    'Startup': { label: 'Startup', color: '#a98bff' },
-    'Governo / Instituição': { label: 'Autoridade e instituições', color: '#cfd5e8' },
-    'Imprensa': { label: 'Imprensa', color: '#ff8a3d' }
+    Visitante: { label: 'Visitante', color: '#00b4f3' },
+    Imprensa: { label: 'Imprensa', color: '#ff8a3d' },
+    Palestrante: { label: 'Palestrante', color: '#fc689a' },
+    Expositor: { label: 'Expositor', color: '#f2c230' }
   };
+  const catOf = (r) => CATEGORIAS[r.perfil] || CATEGORIAS.Visitante;
+  const qrText = (r) => 'SAMOGE27|' + r.numero + '|' + r.id;
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  function qrSvg(text) {
-    if (typeof window.qrcode !== 'function') return '';
+  function makeQr(text) {
+    if (typeof window.qrcode !== 'function') return null;
     const qr = window.qrcode(0, 'M');
     qr.addData(text);
     qr.make();
-    return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    return qr;
   }
 
   function renderCredential(r) {
     const el = document.querySelector('[data-credential]');
-    const cat = CATEGORIAS[r.perfil] || CATEGORIAS['Profissional do setor'];
-    const dias = r.dias.length === 2 ? '03 e 04/03' : r.dias[0];
+    const cat = catOf(r);
+    const qr = makeQr(qrText(r));
     el.style.setProperty('--cat', cat.color);
     el.innerHTML = `
       <div class="cred__top">
@@ -318,17 +329,118 @@
       <div class="cred__body">
         <div class="cred__name">${esc(r.cracha)}<p class="cred__full">${esc(r.nome)}</p></div>
         <dl class="cred__info">
-          <div><dt>Empresa</dt><dd>${esc(r.empresa)}</dd></div>
-          <div><dt>${r.perfil === 'Estudante' ? 'Curso' : 'Cargo'}</dt><dd>${esc(r.cargo)}</dd></div>
-          <div><dt>Cidade</dt><dd>${esc(r.cidade)}/${esc(r.uf)}</dd></div>
-          <div><dt>Dias</dt><dd>${esc(dias)} · 14h às 20h</dd></div>
+          ${r.empresa ? `<div><dt>${r.perfil === 'Imprensa' ? 'Veículo' : 'Empresa'}</dt><dd>${esc(r.empresa)}</dd></div>` : ''}
+          <div><dt>Inscrição</dt><dd class="cred__num">Nº ${esc(r.numero)}</dd></div>
         </dl>
-        <div class="cred__qr" aria-label="QR Code da inscrição ${esc(r.id)}">${qrSvg('SAMOGE27|' + r.id + '|' + r.cracha)}</div>
+        <div class="cred__qr" aria-label="QR Code da inscrição número ${esc(r.numero)}">${qr ? qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true }) : ''}</div>
       </div>
       <div class="cred__foot">
         <span>CEPE · São Mateus/ES</span>
-        <b>${esc(r.id)}</b>
+        <b>Nº ${esc(r.numero)}</b>
       </div>`;
+  }
+
+  /* Salvar credencial: desenha o mesmo layout num canvas e baixa como imagem PNG,
+     pronta para guardar na galeria do celular. */
+  function loadImg(src) {
+    return new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  }
+  function wrapLines(ctx, text, maxW, maxLines) {
+    const words = text.split(/\s+/);
+    const lines = [];
+    let line = '';
+    words.forEach((w) => {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+    });
+    if (line) lines.push(line);
+    return lines.slice(0, maxLines);
+  }
+  async function saveCredential(r) {
+    const W = 540, H = 760, k = 2;
+    const c = document.createElement('canvas');
+    c.width = W * k; c.height = H * k;
+    const ctx = c.getContext('2d');
+    ctx.scale(k, k);
+    const cat = catOf(r);
+    const F = '"Archivo", system-ui, sans-serif';
+    const round = (x, y, w, h, rad) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, rad) : ctx.rect(x, y, w, h); };
+
+    // cartão
+    ctx.fillStyle = '#e9edf6'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); round(20, 20, W - 40, H - 40, 18); ctx.clip();
+    ctx.fillStyle = '#f4f6fb'; ctx.fillRect(20, 20, W - 40, H - 40);
+    // topo
+    ctx.fillStyle = '#1b4fd6'; ctx.fillRect(20, 20, W - 40, 130);
+    ctx.save(); ctx.beginPath(); ctx.rect(20, 20, W - 40, 130); ctx.clip();
+    ctx.fillStyle = 'rgba(252,104,154,0.35)'; ctx.beginPath(); ctx.arc(W - 40, 160, 110, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const logo = await loadImg('assets/logos/samoge-drop.svg');
+    if (logo) ctx.drawImage(logo, 48, 52, 62, 54);
+    ctx.fillStyle = '#f4f6fb'; ctx.font = `900 30px ${F}`; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('SAMOG', 124, 86);
+    let x = 124 + ctx.measureText('SAMOG').width;
+    ctx.fillStyle = '#00b4f3'; ctx.fillText('.e', x, 86); x += ctx.measureText('.e ').width;
+    ctx.fillStyle = '#f4f6fb'; ctx.fillText('2027', x, 86);
+    ctx.font = `500 13px ${F}`; ctx.fillText('São Mateus Óleo, Gás e Energia', 124, 108);
+    ctx.font = `700 11px ${F}`; ctx.textAlign = 'right';
+    ctx.fillText('CREDENCIAL', W - 48, 66); ctx.fillText('DE ACESSO', W - 48, 82);
+    ctx.textAlign = 'left';
+    // categoria
+    ctx.fillStyle = cat.color; ctx.fillRect(20, 150, W - 40, 48);
+    ctx.fillStyle = '#0d1226'; ctx.font = `800 16px ${F}`;
+    ctx.fillText(cat.label.toUpperCase().split('').join(String.fromCharCode(8202)), 48, 180);
+    // nome
+    ctx.fillStyle = '#0d1226'; ctx.font = `900 46px ${F}`;
+    const nameLines = wrapLines(ctx, r.cracha.toUpperCase(), W - 96, 2);
+    let y = 262;
+    nameLines.forEach((l) => { ctx.fillText(l, 48, y); y += 48; });
+    ctx.fillStyle = '#5a6380'; ctx.font = `600 15px ${F}`;
+    ctx.fillText(r.nome.toUpperCase().slice(0, 48), 48, y - 14);
+    y += 30;
+    // dados + QR
+    const info = [];
+    if (r.empresa) info.push([r.perfil === 'Imprensa' ? 'VEÍCULO' : 'EMPRESA', r.empresa]);
+    info.push(['INSCRIÇÃO', 'Nº ' + r.numero]);
+    const qrSize = 150, qrX = W - 48 - qrSize, qrY = H - 120 - qrSize;
+    info.forEach(([label, value]) => {
+      ctx.fillStyle = '#5a6380'; ctx.font = `600 11px ${F}`; ctx.fillText(label, 48, y);
+      ctx.fillStyle = '#0d1226'; ctx.font = `700 17px ${F}`;
+      wrapLines(ctx, value, qrX - 64, 2).forEach((l, i) => ctx.fillText(l, 48, y + 22 + i * 21));
+      y += 66;
+    });
+    const qr = makeQr(qrText(r));
+    if (qr) {
+      ctx.fillStyle = '#ffffff'; round(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16, 8); ctx.fill();
+      const n = qr.getModuleCount(), cell = qrSize / n;
+      ctx.fillStyle = '#0d1226';
+      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) if (qr.isDark(rr, cc)) ctx.fillRect(qrX + cc * cell, qrY + rr * cell, cell + 0.4, cell + 0.4);
+    }
+    // rodapé
+    ctx.strokeStyle = '#c9cfdf'; ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(20, H - 86); ctx.lineTo(W - 20, H - 86); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#5a6380'; ctx.font = `500 14px ${F}`; ctx.fillText('CEPE · São Mateus/ES', 48, H - 50);
+    ctx.fillStyle = '#0d1226'; ctx.font = `800 16px ${F}`; ctx.textAlign = 'right'; ctx.fillText('Nº ' + r.numero, W - 48, H - 50);
+    ctx.restore();
+
+    const name = `credencial-samoge-2027-${r.numero}.png`;
+    try {
+      const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+      const file = new File([blob], name, { type: 'image/png' });
+      // no celular, abre o menu de compartilhar (salvar imagem, enviar no WhatsApp...)
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && matchMedia('(pointer: coarse)').matches) {
+        await navigator.share({ files: [file], title: 'Credencial SAMOG.e 2027' });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // a pessoa fechou o compartilhar
+      window.print(); // sem permissão para gerar a imagem (ex.: arquivo aberto direto do disco)
+    }
   }
 
   // pequena explosão de partículas em volta da credencial
@@ -347,6 +459,20 @@
         onComplete: () => p.remove()
       });
     }
+  }
+
+  /* ---------- Rodada de Negócios ---------- */
+  // Quando o link de inscrição da Rodada existir, basta preencher aqui.
+  const RODADA_URL = '';
+  const rodadaLink = document.querySelector('[data-rodada-link]');
+  if (rodadaLink && RODADA_URL) {
+    rodadaLink.href = RODADA_URL;
+    rodadaLink.target = '_blank';
+    rodadaLink.rel = 'noopener';
+    rodadaLink.removeAttribute('aria-disabled');
+    rodadaLink.querySelector('span').textContent = 'Inscrever-se na Rodada';
+  } else if (rodadaLink) {
+    rodadaLink.addEventListener('click', (e) => e.preventDefault());
   }
 
   /* =========================================================
